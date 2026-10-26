@@ -19,6 +19,7 @@ Page {
 
     allowedOrientations: app.videoCover && Qt.application.state === Qt.ApplicationInactive ? Orientation.Portrait : Orientation.All
     showNavigationIndicator: _controlsVisible
+    cutoutMode: CutoutMode.FullScreen
 
     property string url
     property bool isLocal
@@ -33,6 +34,21 @@ Page {
     Keys.onRightPressed: videoPlayer.seek(videoPlayer.position + 5000)
     Keys.onLeftPressed: videoPlayer.seek(videoPlayer.position - 5000)
     property int _orientation: OrientationReading.TopUp
+
+    // The notch is at the top of the portrait screen, so it is on a different page edge per orientation.
+    // Controls always keep clear of it; the video too, unless fillNotch is set.
+    readonly property real _notch: Screen.topCutout.height
+    readonly property real _insetTop: page.orientation === Orientation.Portrait ? _notch : 0
+    readonly property real _insetBottom: page.orientation === Orientation.PortraitInverted ? _notch : 0
+    readonly property real _insetLeft: page.orientation === Orientation.Landscape ? _notch : 0
+    readonly property real _insetRight: page.orientation === Orientation.LandscapeInverted ? _notch : 0
+    readonly property bool _videoAvoidsNotch: !fillNotch.value && !page.fillMode && !landscapeCover
+
+    ConfigurationValue {
+        id: fillNotch
+        key: "/apps/picoplayer/fillNotch"
+        defaultValue: false
+    }
 
     DisplaySettings {
         id: displaySettings
@@ -171,12 +187,14 @@ Page {
 
             VideoPlayer {
                 id: videoPlayer
-                width : landscapeCover ? page.width*1.6 : (landscape ? page.width : (page.fillMode ? page.height : page.width))
+                width : (landscapeCover ? page.width*1.6 : (landscape ? page.width : (page.fillMode ? page.height : page.width))) - (_videoAvoidsNotch ? _insetLeft + _insetRight : 0)
                 videoSource: url
                 anchors.centerIn: parent
-                height: landscapeCover
+                anchors.horizontalCenterOffset: _videoAvoidsNotch ? (_insetLeft - _insetRight) / 2 : 0
+                anchors.verticalCenterOffset: _videoAvoidsNotch ? (_insetTop - _insetBottom) / 2 : 0
+                height: (landscapeCover
                           ? page.width
-                          : (page.fillMode ? page.width : page.height)
+                          : (page.fillMode ? page.width : page.height)) - (_videoAvoidsNotch ? _insetTop + _insetBottom : 0)
                 transform: Rotation {
                     origin.x: (page.width*1.6)/2
                     origin.y: page.width/2
@@ -471,14 +489,14 @@ Page {
 
             NumberAnimation {
                 id: showAnimation
-                targets: [progress, duration, playButton, streamsButton, playbackSpeedButton]
+                targets: [progress, duration, playButton, notchButton, streamsButton, playbackSpeedButton]
                 properties: "opacity"
                 to: 1
                 duration: 100
             }
             NumberAnimation {
                 id: hideAnimation
-                targets: [progress, duration, playButton, streamsButton, playbackSpeedButton, playbackSpeedSlider]
+                targets: [progress, duration, playButton, notchButton, streamsButton, playbackSpeedButton, playbackSpeedSlider]
                 properties: "opacity"
                 to: 0
                 duration: 100
@@ -493,6 +511,22 @@ Page {
             }
 
             IconButton {
+                id: notchButton
+                visible: opacity != 0 && _notch > 0
+                icon.source: "image://theme/icon-m-scale"
+                highlighted: down || fillNotch.value
+                width: Theme.itemSizeExtraSmall
+                height: width
+                anchors.right: streamsButton.left
+                anchors.top: parent.top
+                anchors.margins: Theme.paddingMedium
+                anchors.topMargin: Theme.paddingMedium + _insetTop
+                icon.width: width
+                icon.height: width
+                onClicked: fillNotch.value = !fillNotch.value
+            }
+
+            IconButton {
                 id: streamsButton
                 visible: opacity != 0
                 icon.source: "qrc:///images/icon-m-source.svg"
@@ -501,6 +535,7 @@ Page {
                 anchors.right: playbackSpeedButton.left
                 anchors.top: parent.top
                 anchors.margins: Theme.paddingMedium
+                anchors.topMargin: Theme.paddingMedium + _insetTop
                 icon.width: width
                 icon.height: width
                 onClicked: pageStack.push(streamsDialog)
@@ -619,6 +654,8 @@ Page {
                 anchors.right: parent.right
                 anchors.top: parent.top
                 anchors.margins: Theme.paddingMedium
+                anchors.topMargin: Theme.paddingMedium + _insetTop
+                anchors.rightMargin: Theme.paddingMedium + _insetRight
                 icon.width: width
                 icon.height: width
                 onClicked: {
@@ -640,8 +677,8 @@ Page {
                 opacity: 0
                 anchors.right: parent.right
                 anchors.top: parent.top
-                anchors.topMargin: width - height + Theme.paddingMedium*2
-                anchors.rightMargin: -(width) + height + Theme.paddingMedium
+                anchors.topMargin: width - height + Theme.paddingMedium*2 + _insetTop
+                anchors.rightMargin: -(width) + height + Theme.paddingMedium + _insetRight
                 width: Theme.itemSizeHuge*4
                 value: 1.0
                 minimumValue: 0.25
@@ -663,7 +700,7 @@ Page {
 
             Label {
                 anchors.top: parent.top
-                anchors.topMargin: playbackSpeedSlider.width - playbackSpeedSlider.height - Theme.paddingMedium*2
+                anchors.topMargin: playbackSpeedSlider.width - playbackSpeedSlider.height - Theme.paddingMedium*2 + _insetTop
                 anchors.left: playbackSpeedSlider.left
                 anchors.leftMargin: playbackSpeedSlider.height/2 - width/2
                 text: playbackSpeedSlider.value
@@ -709,6 +746,8 @@ Page {
                 anchors.left: parent.left
                 anchors.bottom: parent.bottom
                 anchors.margins: Theme.paddingLarge
+                anchors.leftMargin: Theme.paddingLarge + _insetLeft
+                anchors.bottomMargin: Theme.paddingLarge + _insetBottom
                 text:  Format.formatDuration(Math.round(videoPlayer.position/1000), ((videoPlayer.duration/1000) > 3600 ? Formatter.DurationLong : Formatter.DurationShort))
             }
 
@@ -717,6 +756,8 @@ Page {
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
                 anchors.margins: Theme.paddingLarge
+                anchors.rightMargin: Theme.paddingLarge + _insetRight
+                anchors.bottomMargin: Theme.paddingLarge + _insetBottom
                 text: Format.formatDuration(Math.round(videoPlayer.duration/1000), ((videoPlayer.duration/1000) > 3600 ? Formatter.DurationLong : Formatter.DurationShort))
             }
 
@@ -726,8 +767,9 @@ Page {
                 minimumValue: 0
                 maximumValue: videoPlayer.duration
                 anchors.bottom: parent.bottom
-                x: progress.width
-                width: parent.width - progress.width - duration.width
+                anchors.bottomMargin: _insetBottom
+                x: _insetLeft + progress.width
+                width: parent.width - _insetLeft - _insetRight - progress.width - duration.width
                 visible: _controlsVisible
 
                 NumberAnimation on opacity {
@@ -757,9 +799,19 @@ Page {
             style: Text.Outline
             styleColor: "black"
             anchors.bottom: parent.bottom
-            anchors.bottomMargin: Theme.paddingMedium
+            anchors.bottomMargin: Theme.paddingMedium + _insetBottom
             anchors.horizontalCenter: videoPlayer.horizontalCenter
         }
+    }
+
+    // Also hides a zoomed video under the notch
+    Rectangle {
+        visible: !fillNotch.value && !landscapeCover
+        color: "black"
+        x: page.orientation === Orientation.LandscapeInverted ? page.width - _notch : 0
+        y: page.orientation === Orientation.PortraitInverted ? page.height - _notch : 0
+        width: page.isLandscape ? _notch : page.width
+        height: page.isLandscape ? page.height : _notch
     }
 
     CoverActionList {
