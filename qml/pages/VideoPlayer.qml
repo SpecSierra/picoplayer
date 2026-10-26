@@ -36,17 +36,17 @@ Page {
     property int _orientation: OrientationReading.TopUp
 
     // The notch is at the top of the portrait screen, so it is on a different page edge per orientation.
-    // Controls always keep clear of it; the video too, unless fillNotch is set.
+    // Controls always keep clear of it; the video too, except when zoomed with ignoreNotch off.
     readonly property real _notch: Screen.topCutout.height
     readonly property real _insetTop: page.orientation === Orientation.Portrait ? _notch : 0
     readonly property real _insetBottom: page.orientation === Orientation.PortraitInverted ? _notch : 0
     readonly property real _insetLeft: page.orientation === Orientation.Landscape ? _notch : 0
     readonly property real _insetRight: page.orientation === Orientation.LandscapeInverted ? _notch : 0
-    readonly property bool _videoAvoidsNotch: !fillNotch.value && !page.fillMode && !landscapeCover
+    readonly property bool _videoAvoidsNotch: (!page.fillMode || ignoreNotch.value) && !landscapeCover
 
     ConfigurationValue {
-        id: fillNotch
-        key: "/apps/picoplayer/fillNotch"
+        id: ignoreNotch
+        key: "/apps/picoplayer/ignoreNotch"
         defaultValue: false
     }
 
@@ -489,14 +489,14 @@ Page {
 
             NumberAnimation {
                 id: showAnimation
-                targets: [progress, duration, playButton, notchButton, streamsButton, playbackSpeedButton]
+                targets: [progress, duration, playButton, streamsButton, playbackSpeedButton]
                 properties: "opacity"
                 to: 1
                 duration: 100
             }
             NumberAnimation {
                 id: hideAnimation
-                targets: [progress, duration, playButton, notchButton, streamsButton, playbackSpeedButton, playbackSpeedSlider]
+                targets: [progress, duration, playButton, streamsButton, playbackSpeedButton, playbackSpeedSlider]
                 properties: "opacity"
                 to: 0
                 duration: 100
@@ -508,22 +508,6 @@ Page {
                 icon.source: videoPlayer.state == VideoPlayer.StatePlaying ? "image://theme/icon-m-pause" : "image://theme/icon-m-play"
                 anchors.centerIn: parent
                 onClicked: videoPlayer.state == VideoPlayer.StatePlaying ? videoPlayer.pause() : videoPlayer.play()
-            }
-
-            IconButton {
-                id: notchButton
-                visible: opacity != 0 && _notch > 0
-                icon.source: "image://theme/icon-m-scale"
-                highlighted: down || fillNotch.value
-                width: Theme.itemSizeExtraSmall
-                height: width
-                anchors.right: streamsButton.left
-                anchors.top: parent.top
-                anchors.margins: Theme.paddingMedium
-                anchors.topMargin: Theme.paddingMedium + _insetTop
-                icon.width: width
-                icon.height: width
-                onClicked: fillNotch.value = !fillNotch.value
             }
 
             IconButton {
@@ -802,16 +786,6 @@ Page {
             anchors.bottomMargin: Theme.paddingMedium + _insetBottom
             anchors.horizontalCenter: videoPlayer.horizontalCenter
         }
-    }
-
-    // Also hides a zoomed video under the notch
-    Rectangle {
-        visible: !fillNotch.value && !landscapeCover
-        color: "black"
-        x: page.orientation === Orientation.LandscapeInverted ? page.width - _notch : 0
-        y: page.orientation === Orientation.PortraitInverted ? page.height - _notch : 0
-        width: page.isLandscape ? _notch : page.width
-        height: page.isLandscape ? page.height : _notch
     }
 
     CoverActionList {
